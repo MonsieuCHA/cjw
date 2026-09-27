@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한국어 발음 녹음 실험</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbfbf9;
+    --ink: #1c1c1a;
+    --muted: #6b6b66;
+    --line: #dcdcd6;
+    --rec: #c8102e;
+    --ok: #2a7a4b;
+    --btn: #1c1c1a;
+    --btn-ink: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  body { font-size: 18px; line-height: 1.6; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 26px; font-weight: 700; margin: 0 0 8px; }
+  h2 { font-size: 22px; font-weight: 700; margin: 0 0 16px; }
+  p { margin: 0 0 14px; }
+  .en { color: var(--muted); font-size: 15px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  button { font: inherit; font-weight: 500; border: 0; border-radius: 8px; padding: 14px 26px;
+    background: var(--btn); color: var(--btn-ink); cursor: pointer; }
+  button:disabled { opacity: .35; cursor: default; }
+  button.secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+  button:focus-visible { outline: 3px solid #8fb7ff; outline-offset: 2px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+  label { display: block; margin: 18px 0 6px; font-weight: 500; }
+  input[type=text], input[type=number], select { font: inherit; width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--line); border-radius: 8px; background: #fff; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 20px; }
+  .check input { margin-top: 8px; }
+  .progress { color: var(--muted); font-size: 15px; margin-bottom: 40px; }
+  .stimulus { font-size: 40px; line-height: 1.5; font-weight: 500; text-align: center;
+    margin: 56px 0 48px; word-break: keep-all; }
+  .recbar { display: flex; align-items: center; gap: 14px; justify-content: center; margin-bottom: 32px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
+  .dot.on { background: var(--rec); animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+  .meter { width: 220px; height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+  .status { text-align: center; color: var(--muted); font-size: 15px; min-height: 24px; }
+  .center { text-align: center; }
+  .notice { border: 1.5px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 20px 0; font-size: 16px; }
+  .notice.err { border-color: var(--rec); }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  audio { width: 100%; margin-top: 16px; }
+  .fails a { display: block; margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<!-- 1. 안내 및 동의 -->
+<section class="screen active" id="s-intro">
+  <h1>한국어 발음 녹음 실험</h1>
+  <p class="en">Korean pronunciation recording experiment</p>
+  <p>이 실험에서는 화면에 나오는 한국어 문장을 소리 내어 읽습니다. 전체 소요 시간은 약 15분입니다.</p>
+  <p class="en">You will read Korean sentences aloud. The whole session takes about 15 minutes.</p>
+  <div class="notice">
+    <p><strong>시작 전에 확인해 주세요</strong></p>
+    <ul>
+      <li>조용한 방에서 혼자 참여해 주세요. <span class="en">Take part alone in a quiet room.</span></li>
+      <li>이어폰이나 헤드셋의 마이크를 사용하면 더 좋습니다. <span class="en">An earphone or headset microphone is best.</span></li>
+      <li>컴퓨터의 Chrome 또는 Firefox 브라우저를 권장합니다. <span class="en">Use Chrome or Firefox on a computer.</span></li>
+      <li>브라우저가 마이크 사용을 물어보면 <strong>허용</strong>을 눌러 주세요. <span class="en">Click Allow when the browser asks for the microphone.</span></li>
+    </ul>
+  </div>
+  <p id="consent-text">녹음된 음성은 연구 목적으로만 사용되며, 이름 대신 번호로 저장됩니다. 참여는 자발적이며 언제든지 중단할 수 있고, 참여 여부는 성적과 관계가 없습니다.</p>
+  <p class="en">Recordings are used only for research and stored under a number, not your name. Participation is voluntary, you may stop at any time, and it has no effect on your grades.</p>
+  <div class="check">
+    <input type="checkbox" id="consent">
+    <label for="consent" style="margin:0">위 내용을 읽었고 참여에 동의합니다. <span class="en">I have read the above and agree to take part.</span></label>
+  </div>
+  <div class="row"><button id="b-intro" disabled>다음</button></div>
+</section>
+
+<!-- 2. 배경 설문 -->
+<section class="screen" id="s-bg">
+  <h2>참여자 정보 <span class="en">About you</span></h2>
+  <label>참여자 번호 <span class="en">Participant ID</span></label>
+  <input type="text" id="q-pid" placeholder="예: P01">
+  <label>모어 <span class="en">Native language</span></label>
+  <input type="text" id="q-l1">
+  <label>나이 <span class="en">Age</span></label>
+  <input type="number" id="q-age" min="15" max="90">
+  <label>성별 <span class="en">Gender</span></label>
+  <select id="q-gender">
+    <option value="">선택 / Select</option>
+    <option value="F">여성 / Female</option>
+    <option value="M">남성 / Male</option>
+    <option value="X">기타·응답 안 함 / Other, prefer not to say</option>
+  </select>
+  <label>한국어 학습 기간 (개월) <span class="en">Months of Korean study</span></label>
+  <input type="number" id="q-study" min="0">
+  <label>한국 거주 기간 (개월) <span class="en">Months living in Korea</span></label>
+  <input type="number" id="q-stay" min="0">
+  <label>TOPIK 급수 <span class="en">TOPIK level</span></label>
+  <select id="q-topik">
+    <option value="">선택 / Select</option>
+    <option value="0">없음 / None</option>
+    <option value="1">1급</option><option value="2">2급</option><option value="3">3급</option>
+    <option value="4">4급</option><option value="5">5급</option><option value="6">6급</option>
+  </select>
+  <label>한국어 외에 배운 외국어 <span class="en">Other foreign languages you have learned</span></label>
+  <input type="text" id="q-other">
+  <p class="notice" id="bg-err" style="display:none"></p>
+  <div class="row"><button id="b-bg">다음</button></div>
+</section>
+
+<!-- 3. 마이크 점검 -->
+<section class="screen" id="s-mic">
+  <h2>마이크 확인 <span class="en">Microphone check</span></h2>
+  <p>버튼을 누르고 3초 동안 <strong>"안녕하세요, 저는 학생입니다"</strong>라고 말해 주세요. 그 다음 녹음을 들어 보세요.</p>
+  <p class="en">Press the button and say the sentence above for 3 seconds. Then listen to the recording.</p>
+  <label for="mic-select">사용할 마이크 <span class="en">Microphone to use</span></label>
+  <select id="mic-select"></select>
+  <p class="status" id="mic-info" style="text-align:left"></p>
+  <div class="recbar" style="margin-top:24px"><span class="dot" id="mic-dot"></span><div class="meter"><div id="mic-meter"></div></div></div>
+  <p class="status" id="mic-status"></p>
+  <p class="notice err" id="mic-nosignal" style="display:none">말하고 있는데 초록 막대가 움직이지 않으면 위 목록에서 다른 마이크를 골라 보세요. <span class="en">If the green bar does not move while you speak, choose a different microphone above.</span></p>
+  <div class="row">
+    <button id="b-mic-rec">녹음 시작 (3초)</button>
+  </div>
+  <div id="mic-result" style="display:none">
+    <audio id="mic-audio" controls></audio>
+    <p style="margin-top:16px">본인의 목소리가 또렷하게 들립니까? <span class="en">Can you hear your voice clearly?</span></p>
+    <div class="row">
+      <button id="b-mic-ok">네, 잘 들립니다</button>
+      <button class="secondary" id="b-mic-again">다시 녹음</button>
+    </div>
+  </div>
+</section>
+
+<!-- 4·5. 연습 및 본 시행 -->
+<section class="screen" id="s-trial">
+  <p class="progress" id="trial-progress"></p>
+  <p class="center en" id="trial-hint">문장을 먼저 눈으로 읽은 다음, 소리 내어 읽으세요. 다 읽으면 <strong>다음</strong>을 누르세요.<br>Read the sentence silently first, then read it aloud. Press <strong>다음</strong> when finished.</p>
+  <div class="stimulus" id="stimulus"></div>
+  <div class="recbar"><span class="dot on" id="trial-dot"></span><div class="meter"><div id="trial-meter"></div></div></div>
+  <p class="status" id="trial-status"></p>
+  <div class="row" style="justify-content:center">
+    <button id="b-next" disabled>다음</button>
+    <button class="secondary" id="b-redo">다시 녹음</button>
+  </div>
+</section>
+
+<!-- 연습 → 본 시행 사이 안내 -->
+<section class="screen" id="s-break">
+  <h2>연습이 끝났습니다 <span class="en">Practice finished</span></h2>
+  <p>지금부터 본 실험입니다. 같은 방식으로 문장을 읽어 주세요. 문장은 <span id="n-main"></span>개입니다.</p>
+  <p class="en">The main session starts now. Read the sentences the same way.</p>
+  <div class="row"><button id="b-break">시작</button></div>
+</section>
+
+<!-- 6. 완료 -->
+<section class="screen" id="s-done">
+  <h2>모두 끝났습니다. 참여해 주셔서 감사합니다.</h2>
+  <p class="en">All done. Thank you for taking part.</p>
+  <p class="status" id="done-status"></p>
+  <div id="done-fail" style="display:none">
+    <div class="notice err">
+      <p>일부 녹음이 전송되지 않았습니다. 아래 파일을 내려받아 연구자에게 보내 주세요.</p>
+      <p class="en">Some recordings could not be sent. Please download the files below and send them to the researcher.</p>
+      <div class="fails" id="fail-links"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+/* =====================================================================
+   설정 (연구자가 수정하는 부분)
+   ===================================================================== */
+
+// Apps Script 웹 앱 배포 URL (README 참고). 비워 두면 업로드를 건너뛰고 파일을 내려받게 합니다.
+const UPLOAD_URL = "https://script.google.com/macros/s/AKfycbz3jQo9EegZORH2-NrMAlPvYZvylgjHDAtPsSag4ES0Ugx1s7WhdV38E1_mZM1n27Kk/exec";
+
+// 틀 문장. {단어} 자리에 목표 단어가 들어갑니다.
+// '다시'가 뒤따르므로 받침 파열음은 자음 앞 환경(불파 유지)이 됩니다.
+const FRAME = "나는 {단어} 다고 했다.";
+
+// 연습 시행 (녹음은 되지만 파일명에 practice가 붙음)
+const PRACTICE = [
+  { id: "pr1", target: "학교", cond: "practice" },
+  { id: "pr2", target: "나무", cond: "practice" },
+];
+
+// 본 시행 자극. id는 파일명에 쓰이므로 고유해야 하며 영문·숫자만 권장.
+// cond는 분석용 조건 표시. sentence를 직접 지정하면 FRAME 대신 그 문장을 씁니다.
+const STIMULI = [
+  // ㅢ — 어두
+  { id: "ui01", target: "의사", cond: "ui_initial" },
+  { id: "ui02", target: "의자", cond: "ui_initial" },
+  { id: "ui03", target: "의미", cond: "ui_initial" },
+  // ㅢ — 자음 뒤
+  { id: "ui04", target: "희망", cond: "ui_afterC" },
+  { id: "ui05", target: "무늬", cond: "ui_afterC" },
+  // ㅢ — 비어두
+  { id: "ui06", target: "회의", cond: "ui_noninitial" },
+  { id: "ui07", target: "주의", cond: "ui_noninitial" },
+  // ㅢ — 조사
+  { id: "ui08", target: "나의 책", cond: "ui_particle" },
+  // 받침 파열음
+  { id: "cd01", target: "책", cond: "coda_k" },
+  { id: "cd02", target: "밥", cond: "coda_p" },
+  { id: "cd03", target: "옷", cond: "coda_t" },
+  { id: "cd04", target: "부엌", cond: "coda_k" },
+  { id: "cd05", target: "꽃", cond: "coda_t" },
+  { id: "cd06", target: "입", cond: "coda_p" },
+  // 채움 자극
+  { id: "f01", target: "사람", cond: "filler" },
+  { id: "f02", target: "노래", cond: "filler" },
+  { id: "f03", target: "바다", cond: "filler" },
+  { id: "f04", target: "우유", cond: "filler" },
+];
+
+const REPEATS = 6;          // 각 자극 반복 횟수
+const RANDOMIZE = true;     // 참가자별 무작위 순서
+const MIN_REC_MS = 1000;    // 이 시간 전에는 '다음' 비활성
+const MAX_REC_MS = 30000;   // 상한, 넘으면 자동 종료
+const MAX_REDO = 1;         // 시행당 재녹음 허용 횟수
+
+/* =====================================================================
+   이하 수정 불필요
+   ===================================================================== */
+
+const $ = id => document.getElementById(id);
+const state = { pid: null, meta: null, order: [], idx: 0, phase: "practice",
+  blobs: [], failed: [], redoCount: 0, recStart: 0, log: [] };
+
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  $(id).classList.add("active");
+  window.scrollTo(0, 0);
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function sentenceOf(s) { return s.sentence || FRAME.replace("{단어}", s.target); }
+function pad(n) { return String(n).padStart(3, "0"); }
+
+/* ---------- 오디오: Web Audio API로 원시 PCM을 받아 WAV로 저장 ---------- */
+const audio = { ctx: null, stream: null, source: null, analyser: null, worklet: null, proc: null,
+  chunks: [], recording: false, sampleRate: 0, meterEl: null, raf: null };
+
+const WORKLET_SRC = `
+class PCMCapture extends AudioWorkletProcessor {
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (ch) this.port.postMessage(new Float32Array(ch));
+    return true;
+  }
+}
+registerProcessor("pcm-capture", PCMCapture);`;
+
+function ensureContext() {
+  // 사용자 클릭 직후에 만들어 두어야 브라우저가 오디오 처리를 잠재우지 않음
+  if (!audio.ctx) audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.ctx.state !== "running") audio.ctx.resume();
+}
+
+async function initAudio(deviceId) {
+  ensureContext();
+  const constraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+  if (deviceId) constraints.deviceId = { exact: deviceId };
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+  await audio.ctx.resume();
+
+  // 장치를 바꾸는 경우 이전 연결 정리
+  if (audio.stream) audio.stream.getTracks().forEach(t => t.stop());
+  if (audio.source) audio.source.disconnect();
+  audio.stream = stream;
+  audio.track = stream.getAudioTracks()[0];
+  audio.sampleRate = audio.ctx.sampleRate;
+  audio.source = audio.ctx.createMediaStreamSource(stream);
+
+  if (!audio.analyser) { audio.analyser = audio.ctx.createAnalyser(); audio.analyser.fftSize = 512; }
+  audio.source.connect(audio.analyser);
+
+  const onData = f32 => { if (audio.recording) audio.chunks.push(f32); };
+  if (!audio.worklet && !audio.proc) {
+    let ok = false;
+    if (audio.ctx.audioWorklet) {
+      try {
+        const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: "application/javascript" }));
+        await audio.ctx.audioWorklet.addModule(url);
+        audio.worklet = new AudioWorkletNode(audio.ctx, "pcm-capture");
+        audio.worklet.port.onmessage = e => onData(e.data);
+        const mute = audio.ctx.createGain(); mute.gain.value = 0;
+        audio.worklet.connect(mute).connect(audio.ctx.destination);
+        ok = true;
+      } catch (e) { audio.worklet = null; }
+    }
+    if (!ok) {
+      audio.proc = audio.ctx.createScriptProcessor(4096, 1, 1);
+      audio.proc.onaudioprocess = e => onData(new Float32Array(e.inputBuffer.getChannelData(0)));
+      const mute = audio.ctx.createGain(); mute.gain.value = 0;
+      audio.proc.connect(mute).connect(audio.ctx.destination);
+    }
+  }
+  audio.source.connect(audio.worklet || audio.proc);
+  if (!audio.raf) meterLoop();
+  await listDevices();
+  updateMicInfo();
+}
+
+async function listDevices() {
+  const sel = $("mic-select");
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput");
+  sel.innerHTML = "";
+  devs.forEach((d, i) => {
+    const o = document.createElement("option");
+    o.value = d.deviceId; o.textContent = d.label || `마이크 ${i + 1}`;
+    sel.appendChild(o);
+  });
+  const cur = audio.track && audio.track.getSettings().deviceId;
+  if (cur) sel.value = cur;
+}
+
+function updateMicInfo() {
+  const st = audio.track ? audio.track.getSettings() : {};
+  $("mic-info").textContent =
+    `연결된 장치: ${audio.track ? audio.track.label : "없음"} · 표본화율 ${audio.sampleRate} Hz · 오디오 상태: ${audio.ctx.state}`;
+}
+
+$("mic-select").onchange = async e => {
+  $("mic-info").textContent = "장치 변경 중…";
+  try { await initAudio(e.target.value); $("mic-nosignal").style.display = "none"; }
+  catch (err) { $("mic-info").textContent = "이 장치를 사용할 수 없습니다: " + err.name; }
+};
+
+let silentFrames = 0;
+function meterLoop() {
+  const buf = new Uint8Array(audio.analyser.fftSize);
+  const tick = () => {
+    audio.analyser.getByteTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
+    if (audio.meterEl) audio.meterEl.style.width = Math.min(100, peak / 128 * 220) + "%";
+    // 마이크 점검 화면에서 3초 이상 신호가 전혀 없으면 안내 표시
+    if ($("s-mic").classList.contains("active")) {
+      silentFrames = peak < 2 ? silentFrames + 1 : 0;
+      $("mic-nosignal").style.display = silentFrames > 180 ? "block" : "none";
+    }
+    audio.raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function startRec() { audio.chunks = []; audio.recording = true; }
+function stopRec() {
+  audio.recording = false;
+  const total = audio.chunks.reduce((n, c) => n + c.length, 0);
+  const pcm = new Float32Array(total);
+  let off = 0; for (const c of audio.chunks) { pcm.set(c, off); off += c.length; }
+  audio.chunks = [];
+  return encodeWav(pcm, audio.sampleRate);
+}
+
+function encodeWav(samples, sr) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, samples.length * 2, true);
+  let o = 44;
+  for (let i = 0; i < samples.length; i++, o += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+/* ---------- 업로드 ---------- */
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+async function post(payload, tries = 3) {
+  if (!UPLOAD_URL) throw new Error("no-url");
+  for (let t = 1; t <= tries; t++) {
+    try {
+      const r = await fetch(UPLOAD_URL, { method: "POST", body: JSON.stringify(payload) });
+      const j = await r.json();
+      if (j && j.ok) return j;
+      throw new Error(j && j.error || "server");
+    } catch (e) {
+      if (t === tries) throw e;
+      await new Promise(r => setTimeout(r, 1500 * t));
+    }
+  }
+}
+
+const uploads = [];   // 진행 중인 업로드 Promise 목록
+
+function queueUpload(rec) {
+  const p = (async () => {
+    try {
+      const b64 = await blobToBase64(rec.blob);
+      await post({ type: "audio", pid: state.pid, filename: rec.filename, data: b64, meta: rec.meta });
+      rec.uploaded = true;
+    } catch (e) {
+      rec.uploaded = false; rec.error = String(e);
+      state.failed.push(rec);
+    }
+  })();
+  uploads.push(p);
+}
+
+/* ---------- 화면 1: 동의 ---------- */
+$("consent").onchange = e => { $("b-intro").disabled = !e.target.checked; };
+$("b-intro").onclick = () => {
+  const urlPid = new URLSearchParams(location.search).get("pid");
+  if (urlPid) $("q-pid").value = urlPid;
+  show("s-bg");
+};
+
+/* ---------- 화면 2: 배경 설문 ---------- */
+$("b-bg").onclick = async () => {
+  const pid = $("q-pid").value.trim().replace(/[^A-Za-z0-9_-]/g, "");
+  const meta = {
+    pid, l1: $("q-l1").value.trim(), age: $("q-age").value, gender: $("q-gender").value,
+    study_months: $("q-study").value, stay_months: $("q-stay").value,
+    topik: $("q-topik").value, other_langs: $("q-other").value.trim(),
+    ua: navigator.userAgent, started: new Date().toISOString()
+  };
+  const err = $("bg-err");
+  if (!pid || !meta.l1 || !meta.age || !meta.gender || meta.study_months === "" || meta.stay_months === "" || meta.topik === "") {
+    err.textContent = "모든 항목을 채워 주세요. / Please fill in every field."; err.style.display = "block"; return;
+  }
+  err.style.display = "none";
+  state.pid = pid; state.meta = meta;
+  ensureContext();
+  $("b-bg").disabled = true; $("b-bg").textContent = "마이크 준비 중…";
+  try {
+    await initAudio();
+  } catch (e) {
+    err.textContent = "마이크를 사용할 수 없습니다 (" + e.name + "). 브라우저 주소창 왼쪽 자물쇠 아이콘에서 마이크를 허용하고, Windows 설정 → 개인 정보 → 마이크에서 앱의 마이크 사용이 켜져 있는지 확인한 뒤 새로고침해 주세요. / Microphone unavailable. Allow the microphone in the browser and in Windows privacy settings, then reload.";
+    err.style.display = "block"; $("b-bg").disabled = false; $("b-bg").textContent = "다음"; return;
+  }
+  meta.sample_rate = audio.sampleRate;
+  meta.capture = audio.worklet ? "worklet" : "scriptprocessor";
+  post({ type: "meta", pid, meta }).catch(() => {});   // 설문은 실패해도 진행
+  audio.meterEl = $("mic-meter");
+  show("s-mic");
+};
+
+/* ---------- 화면 3: 마이크 점검 ---------- */
+$("b-mic-rec").onclick = () => {
+  ensureContext(); updateMicInfo();
+  $("b-mic-rec").disabled = true; $("mic-result").style.display = "none";
+  $("mic-dot").classList.add("on"); $("mic-status").textContent = "녹음 중… / Recording…";
+  startRec();
+  setTimeout(() => {
+    const blob = stopRec();
+    $("mic-dot").classList.remove("on"); $("mic-status").textContent = "";
+    $("mic-audio").src = URL.createObjectURL(blob);
+    $("mic-result").style.display = "block"; $("b-mic-rec").disabled = false;
+    state.micCheckBlob = blob;
+  }, 3000);
+};
+$("b-mic-again").onclick = () => $("b-mic-rec").click();
+$("b-mic-ok").onclick = () => {
+  queueUpload({ blob: state.micCheckBlob, filename: `${state.pid}_miccheck.wav`,
+    meta: { pid: state.pid, trial: 0, id: "miccheck", cond: "miccheck", sentence: "", redo: 0, dur_ms: 3000 } });
+  beginPhase("practice");
+};
+
+/* ---------- 화면 4·5: 시행 ---------- */
+function beginPhase(phase) {
+  state.phase = phase; state.idx = 0;
+  if (phase === "practice") state.order = PRACTICE.slice();
+  else {
+    let list = [];
+    for (let r = 0; r < REPEATS; r++) list = list.concat(STIMULI.map(s => ({ ...s, rep: r + 1 })));
+    state.order = RANDOMIZE ? shuffle(list) : list;
+  }
+  audio.meterEl = $("trial-meter");
+  show("s-trial");
+  runTrial();
+}
+
+let maxTimer = null, minTimer = null;
+
+function runTrial() {
+  const s = state.order[state.idx];
+  const n = state.order.length;
+  $("trial-progress").textContent = state.phase === "practice"
+    ? `연습 ${state.idx + 1} / ${n} (Practice)` : `${state.idx + 1} / ${n}`;
+  $("stimulus").textContent = sentenceOf(s);
+  $("trial-status").textContent = "녹음 중 / Recording";
+  $("b-next").disabled = true; $("b-redo").disabled = true;
+  $("b-redo").style.visibility = state.redoCount < MAX_REDO ? "visible" : "hidden";
+  ensureContext();
+  state.recStart = performance.now();
+  startRec();
+  minTimer = setTimeout(() => { $("b-next").disabled = false; $("b-redo").disabled = state.redoCount >= MAX_REDO; }, MIN_REC_MS);
+  maxTimer = setTimeout(() => finishTrial(false, true), MAX_REC_MS);
+}
+
+function finishTrial(redo, timeout) {
+  clearTimeout(minTimer); clearTimeout(maxTimer);
+  const dur = Math.round(performance.now() - state.recStart);
+  const blob = stopRec();
+  const s = state.order[state.idx];
+  const trialNo = state.idx + 1;
+  const tag = state.phase === "practice" ? "practice_" : "";
+  const attempt = state.redoCount + 1;
+  // 재녹음을 누르면 지금까지의 녹음은 discarded로 저장되고, 최종 녹음만 기본 파일명을 가짐
+  const filename = `${state.pid}_${tag}${pad(trialNo)}_${s.id}${s.rep && REPEATS > 1 ? "_r" + s.rep : ""}${redo ? "_attempt" + attempt + "_discarded" : ""}.wav`;
+  const rec = { blob, filename, meta: { pid: state.pid, phase: state.phase, trial: trialNo, id: s.id, cond: s.cond,
+    target: s.target, sentence: sentenceOf(s), attempt, discarded: redo ? 1 : 0, timeout: timeout ? 1 : 0, dur_ms: dur,
+    time: new Date().toISOString() } };
+  state.blobs.push(rec);
+  queueUpload(rec);
+
+  if (redo) { state.redoCount++; runTrial(); return; }   // 같은 자극으로 다시
+  state.redoCount = 0;
+  state.idx++;
+  if (state.idx < state.order.length) { runTrial(); return; }
+  if (state.phase === "practice") { $("n-main").textContent = STIMULI.length * REPEATS; show("s-break"); return; }
+  finishAll();
+}
+
+$("b-next").onclick = () => finishTrial(false, false);
+$("b-redo").onclick = () => finishTrial(true, false);
+$("b-break").onclick = () => beginPhase("main");
+
+/* ---------- 화면 6: 완료 ---------- */
+async function finishAll() {
+  show("s-done");
+  cancelAnimationFrame(audio.raf);
+  if (audio.stream) audio.stream.getTracks().forEach(t => t.stop());
+  $("done-status").textContent = "녹음 파일을 전송하고 있습니다. 창을 닫지 마세요. / Sending files, please keep this window open.";
+  await Promise.all(uploads);
+  try { await post({ type: "done", pid: state.pid, n: state.blobs.length, failed: state.failed.map(f => f.filename) }); } catch (e) {}
+  if (state.failed.length === 0 && UPLOAD_URL) {
+    $("done-status").textContent = "전송이 완료되었습니다. 창을 닫아도 됩니다. / All files sent. You may close this window.";
+    return;
+  }
+  $("done-status").textContent = "";
+  const list = UPLOAD_URL ? state.failed : state.blobs;
+  const box = $("fail-links");
+  list.forEach(rec => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(rec.blob); a.download = rec.filename; a.textContent = rec.filename;
+    box.appendChild(a);
+  });
+  $("done-fail").style.display = "block";
+}
+
+// 실험 도중 실수로 닫는 것 방지
+window.addEventListener("beforeunload", e => {
+  if (state.pid && !$("s-done").classList.contains("active")) { e.preventDefault(); e.returnValue = ""; }
+});
+</script>
+</body>
+</html>
